@@ -15,6 +15,16 @@ module.exports = async (req, res) => {
     return;
   }
 
+  // 로그인한 사람만 이 기능을 쓸 수 있게 한다 — 원래 인증 확인이 아예 없어서,
+  // 누구나 임의의 userId로 원하는 내용의 푸시를 보낼 수 있는 상태였다(스팸/괴롭힘
+  // 위험). 완전히 막을 순 없지만(다른 사람에게 알림을 보내는 기능 자체의 특성상),
+  // 최소한 "로그인된 진짜 계정"만 호출할 수 있게 해서 익명 남용을 막는다.
+  const auth = req.headers.authorization;
+  if (!auth) {
+    res.status(401).json({ error: "missing authorization" });
+    return;
+  }
+
   const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
   const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
   const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -22,6 +32,19 @@ module.exports = async (req, res) => {
 
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !SUPABASE_URL || !SERVICE_ROLE_KEY) {
     res.status(500).json({ error: "server not configured — VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY / SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 환경변수가 필요합니다" });
+    return;
+  }
+
+  try {
+    const callerRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { Authorization: auth, apikey: SERVICE_ROLE_KEY },
+    });
+    if (!callerRes.ok) {
+      res.status(401).json({ error: "invalid session" });
+      return;
+    }
+  } catch (e) {
+    res.status(401).json({ error: "invalid session" });
     return;
   }
 
