@@ -1893,7 +1893,13 @@ function MapOverview3D({
           longPressTimer = setTimeout(() => {
             if (dragMoved) return; // 실제로 끌어서 옮기는 중이면 삭제로 안 친다
             longPressTriggeredId = d.id;
-            if (window.confirm(`"${d.label}" 노드를 삭제할까요?\n하위 노드와 기록도 함께 사라져요.`)) {
+            // 확인창(window.confirm)은 브라우저를 잠깐 멈추게 하는 성질이 있어서, 그
+            // 사이에 드래그의 "end" 신호가 제대로 전달이 안 될 수 있다 — 그러면
+            // 시뮬레이션이 계속 "뜨거운" 상태로 남아 그래프가 멈추지 않고 계속
+            // 흔들린다. 확인창 뜨기 전에 미리 안전하게 식혀둔다.
+            simulation.alphaTarget(0);
+            d.fx = null; d.fy = null;
+            if (window.confirm(`"${d.label ?? d.id}" 노드를 삭제할까요?\n하위 노드와 기록도 함께 사라져요.`)) {
               onDeleteNode(d.id);
             }
           }, 550);
@@ -1941,7 +1947,7 @@ function MapOverview3D({
     });
 
     return () => { simulation.stop(); };
-  }, [nodes, displayNodes, dims, depthOf, recordCounts]);
+  }, [nodes, displayNodes, dims, depthOf, recordCounts, onDeleteNode, onNavigate]);
 
   return (
     <motion.div
