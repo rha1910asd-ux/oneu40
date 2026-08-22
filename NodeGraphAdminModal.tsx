@@ -88,17 +88,12 @@ export function NodeGraphAdminModal({ isOpen, onClose }: NodeGraphAdminModalProp
 
     const nodesData = nodes.map((n) => ({ ...n, category: categoryOf[n.id] ?? "eat" }));
     const treeLinks = nodes.filter((n) => n.parentId).map((n) => ({ source: n.parentId, target: n.id, kind: "tree" as const }));
-    const relatedSeen = new Set<string>();
-    const relatedLinks: { source: string; target: string; kind: "related" }[] = [];
-    nodes.forEach((n) => n.related.forEach((r) => {
-      const key = [n.id, r].sort().join("|");
-      if (relatedSeen.has(key)) return;
-      relatedSeen.add(key);
-      relatedLinks.push({ source: n.id, target: r, kind: "related" });
-    }));
     const dbLinks = dbConnections.map((c) => ({ source: c.nodeA, target: c.nodeB, kind: "db" as const, connId: c.id }));
     const validIds = new Set(nodesData.map((n) => n.id));
-    const allLinks = [...treeLinks, ...relatedLinks, ...dbLinks].filter(
+    // related(점선)은 코드에 미리 정해둔, 이 화면에서 손댈 수 없는 관계라 여기 넣으면
+    // "이게 뭔지" 헷갈리기만 하고 관리할 수도 없다 — 트리 구조와 관리자가 실제로 만든
+    // 연결(db)만 보여준다.
+    const allLinks = [...treeLinks, ...dbLinks].filter(
       (l) => validIds.has(l.source as string) && validIds.has(l.target as string)
     );
 
@@ -116,17 +111,22 @@ export function NodeGraphAdminModal({ isOpen, onClose }: NodeGraphAdminModalProp
       .force("collide", d3.forceCollide().radius(22));
 
     const linkSel = g.append("g").selectAll("line").data(allLinks).join("line")
-      .attr("stroke", (l: any) => (l.kind === "tree" ? "#B0A08C" : l.kind === "db" ? "#5A8B9B" : "#9B7A5A"))
+      .attr("stroke", (l: any) => (l.kind === "tree" ? "#B0A08C" : "#5A8B9B"))
       .attr("stroke-width", (l: any) => (l.kind === "db" ? 2 : 1))
-      .attr("stroke-dasharray", (l: any) => (l.kind === "related" ? "3 3" : l.kind === "db" ? "1 0" : null))
       .attr("stroke-opacity", (l: any) => (l.kind === "tree" ? 0.3 : 0.55));
 
     const nodeSel = g.append("g").selectAll("g").data(nodesData).join("g")
       .style("cursor", "pointer")
       .style("opacity", (d: any) => (filteredNodeIds && !filteredNodeIds.has(d.id) ? 0.15 : 1))
       .call(d3.drag<any, any>()
-        .on("start", (event, d: any) => { if (!event.active) simulation.alphaTarget(0.2).restart(); d.fx = d.x; d.fy = d.y; })
-        .on("drag", (event, d: any) => { d.fx = event.x; d.fy = event.y; })
+        // "start"에서 바로 재가열하면, 그냥 살짝 누르기만 해도(드래그 의도 없이) 전체
+        // 그래프가 요동치며 재배치됐다 — 실제로 움직이기 시작(drag)할 때만 재가열해서,
+        // 클릭만 하는 경우엔 그래프가 가만히 있게 한다.
+        .on("start", (_event, d: any) => { d.fx = d.x; d.fy = d.y; })
+        .on("drag", (event, d: any) => {
+          if (!event.active) simulation.alphaTarget(0.2).restart();
+          d.fx = event.x; d.fy = event.y;
+        })
         .on("end", (event, d: any) => { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }) as any)
       .on("click", (_event, d: any) => {
         setSelected((prev) => {
@@ -243,7 +243,6 @@ export function NodeGraphAdminModal({ isOpen, onClose }: NodeGraphAdminModalProp
             </div>
             <div style={{ display: "flex", gap: 12, fontSize: 10.5, color: "var(--muted-foreground)" }}>
               <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 0, borderTop: "1px solid #B0A08C", display: "inline-block" }} />트리</span>
-              <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 0, borderTop: "1px dashed #9B7A5A", display: "inline-block" }} />related</span>
               <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 14, height: 0, borderTop: "2px solid #5A8B9B", display: "inline-block" }} />관리자 연결</span>
             </div>
           </div>
