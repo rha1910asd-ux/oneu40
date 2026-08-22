@@ -150,13 +150,20 @@ function computeAbstractLayout(nodes: MapNode[]): Map<string, { x: number; y: nu
 function buildBreadcrumb(targetId: string, nodes: MapNode[]): string[] {
   const path: string[] = [];
   let current: string | null = targetId;
+  const visited = new Set<string>(); // 부모 체인이 순환 참조로 꼬여있어도 무한루프 안 나게
   while (current) {
+    if (visited.has(current)) break;
+    visited.add(current);
     path.unshift(current);
     if (current === ROOT_ID) break;
     const node = nodes.find(n => n.id === current);
     current = node?.parentId ?? null;
   }
-  return path.length > 0 ? path : [ROOT_ID];
+  // 부모 체인 중간에 이미 없어진 노드가 껴있으면(연결이 끊긴 경우), 위 루프가 "나"까지
+  // 못 거슬러 올라가고 중간에서 끝나버린다 — 이럴 때 경로 맨 앞에 "나"가 없으면 직접
+  // 채워넣어서, 항상 유효한(뿌리에서 시작하는) 경로를 돌려주게 한다.
+  if (path.length === 0 || path[0] !== ROOT_ID) path.unshift(ROOT_ID);
+  return path;
 }
 
 function curveD(x1: number, y1: number, x2: number, y2: number): string {
