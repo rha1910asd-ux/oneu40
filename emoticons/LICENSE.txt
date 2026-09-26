@@ -1,0 +1,6 @@
+이 폴더의 이모티콘 그림은 Twemoji에서 가져왔습니다.
+https://github.com/jdecked/twemoji
+
+Copyright 2019 Twitter, Inc and other contributors
+Copyright 2024 jdecked and other contributors
+Graphics licensed under CC-BY 4.0: https://creativecommons.org/licenses/by/4.0/
