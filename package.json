@@ -1,0 +1,11 @@
+{
+  "name": "oneu-e2e",
+  "private": true,
+  "scripts": {
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "vite": "^7.3.6"
+  }
+}
