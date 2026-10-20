@@ -1,0 +1,21 @@
+import{c as h,j as f}from"./index-DmLeobxx.js";import{b as i}from"./react-C9chu8PC.js";/**
+ * @license lucide-react v0.487.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const m=[["path",{d:"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4",key:"1uf3rs"}],["polyline",{points:"16 17 21 12 16 7",key:"1gabdz"}],["line",{x1:"21",x2:"9",y1:"12",y2:"12",key:"1uyos4"}]],P=h("log-out",m);/**
+ * @license lucide-react v0.487.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const M=[["path",{d:"M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z",key:"1a8usu"}],["path",{d:"m15 5 4 4",key:"1mk7zo"}]],_=h("pencil",M);/**
+ * @license lucide-react v0.487.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const k=[["path",{d:"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8",key:"1357e3"}],["path",{d:"M3 3v5h5",key:"1xhq8a"}]],j=h("rotate-ccw",k);/**
+ * @license lucide-react v0.487.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const b=[["path",{d:"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3",key:"wmoenq"}],["path",{d:"M12 9v4",key:"juzpu7"}],["path",{d:"M12 17h.01",key:"p32p05"}]],S=h("triangle-alert",b);function x(o){let n=2166136261;for(let e=0;e<o.length;e++)n^=o.charCodeAt(e),n=Math.imul(n,16777619);return(n>>>0)/4294967295}function g(o,n){if(o==="square"){const c=Math.abs(Math.cos(n)),a=Math.abs(Math.sin(n));return .92/Math.pow(Math.pow(c,5)+Math.pow(a,5),1/5)}if(o==="hexagon"){const e=Math.PI/3,c=((n+Math.PI/2)%e+e)%e-e/2;return Math.cos(e/2)/Math.cos(c)*.98}return 1}function L(o,n,e="circle",c=0){const a=o/2-1.5-c,u=o/2,r=x(n)*10,t=72;let s="";for(let d=0;d<=t;d++){const l=d/t*Math.PI*2-Math.PI/2,y=Math.sin(l*4+r)*.45+Math.sin(l*7+r*1.7)*.3+Math.sin(l*11+r*2.3)*.15,p=a*g(e,l)+y*0,w=u+p*Math.cos(l),v=u+p*Math.sin(l);s+=(d?" L":"M")+w.toFixed(2)+" "+v.toFixed(2)}return s+" Z"}function I({size:o,seed:n,shape:e="circle",fill:c,stroke:a,strokeWidth:u=1.2,dashed:r=!1,shadow:t=!0}){const s=i.useMemo(()=>L(o,n,e),[o,n,e]);return f.jsxs("svg",{width:o,height:o,viewBox:`0 0 ${o} ${o}`,"aria-hidden":"true",style:{position:"absolute",inset:0,overflow:"visible",pointerEvents:"none"},children:[t&&f.jsx("path",{d:s,transform:"translate(0.6 2.2)",fill:"color-mix(in srgb, var(--foreground) 9%, transparent)"}),f.jsx("path",{d:s,fill:c,stroke:a??"none",strokeWidth:u,strokeLinejoin:"round",strokeLinecap:"round",strokeDasharray:r?"3 2.5":void 0})]})}function $(o,n={}){const e=n.blockTouch??!0;i.useEffect(()=>{if(!o)return;const c=s=>{s.cancelable&&s.preventDefault()};e&&document.addEventListener("touchmove",c,{passive:!1});const a=()=>{u.style.overflow=r,document.body.style.overflow=t};window.addEventListener("blur",a);const u=document.documentElement,r=u.style.overflow,t=document.body.style.overflow;return u.style.overflow="hidden",document.body.style.overflow="hidden",()=>{document.removeEventListener("touchmove",c),window.removeEventListener("blur",a),u.style.overflow=r,document.body.style.overflow=t}},[o,e])}function H(o,n){const e=i.useRef(0),c=i.useRef(void 0),a=i.useRef(0),u=i.useRef(n);u.current=n,i.useEffect(()=>{const r=Math.max(0,o),t=window.history.state;for((t==null?void 0:t.key)!==c.current&&(c.current=t==null?void 0:t.key,e.current=(t==null?void 0:t.oneuStep)??0);e.current<r;){e.current+=1;try{window.history.pushState({...window.history.state??{},oneuStep:e.current},"")}catch{break}}if(e.current>r){const s=e.current-r;e.current=r,a.current+=1,window.history.go(-s)}},[o]),i.useEffect(()=>{const r=()=>{if(a.current>0){a.current-=1;return}const t=window.history.state,s=(t==null?void 0:t.oneuStep)??0;(t==null?void 0:t.key)===c.current&&s<e.current?(e.current=s,u.current()):(c.current=t==null?void 0:t.key,e.current=s)};return window.addEventListener("popstate",r),()=>window.removeEventListener("popstate",r)},[])}export{I as H,P as L,_ as P,j as R,S as T,$ as a,H as u};
