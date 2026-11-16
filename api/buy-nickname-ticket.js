@@ -4,7 +4,8 @@
 // 그래서 일반 클라이언트가 아니라 이 서버 함수(service_role 키, RLS 우회)를
 // 통해서만 늘릴 수 있다.
 
-const TICKET_PRICE_EMERALDS = 1;
+// 재화를 뺐다 — 변경권은 값 없이 준다(0). 아래 에메랄드 확인·차감은 값이 0이면 건너뛴다
+const TICKET_PRICE_EMERALDS = 0;
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
@@ -50,13 +51,13 @@ module.exports = async (req, res) => {
     );
     const currencyRows = currencyRes.ok ? await currencyRes.json() : [];
     const currentEmeralds = currencyRows[0]?.emeralds ?? 0;
-    if (currentEmeralds < TICKET_PRICE_EMERALDS) {
+    if (TICKET_PRICE_EMERALDS > 0 && currentEmeralds < TICKET_PRICE_EMERALDS) {
       res.status(400).json({ error: "에메랄드가 부족해요." });
       return;
     }
 
     // 2) 에메랄드를 차감한다.
-    const { error: spendError } = await (async () => {
+    const { error: spendError } = TICKET_PRICE_EMERALDS === 0 ? { error: null } : await (async () => {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/user_currency?user_id=eq.${userId}`, {
         method: "PATCH",
         headers: {
