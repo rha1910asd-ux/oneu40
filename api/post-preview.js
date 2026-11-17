@@ -19,6 +19,13 @@ function esc(s) {
     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 
+/** <script> 안에 넣는 문자열 — "</script>" 같은 글자로 스크립트 밖으로 빠져나가지 못하게 < > & 와 줄바꿈 문자를 바꿔 넣는다. */
+function jsStr(s) {
+  return JSON.stringify(String(s ?? ""))
+    .replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
+
 /** 본문에서 미리보기 한 줄을 뽑는다 — 주소·줄바꿈을 걷어내고 앞부분만. */
 function summarize(content) {
   const text = String(content ?? "")
@@ -44,7 +51,8 @@ async function supa(path, url, key) {
 
 module.exports = async (req, res) => {
   const id = String((req.query && req.query.id) || "");
-  const origin = `https://${req.headers["x-forwarded-host"] || req.headers.host}`;
+  const hostRaw = String(req.headers["x-forwarded-host"] || req.headers.host || "");
+  const origin = `https://${/^[A-Za-z0-9.\-]+(:\d+)?$/.test(hostRaw) ? hostRaw : "oneu-six.vercel.app"}`;
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -57,7 +65,11 @@ module.exports = async (req, res) => {
       const rows = await supa(`posts?id=eq.${id}&select=title,content,image_url,image_urls,node_path,is_frozen`, SUPABASE_URL, KEY);
       const post = rows && rows[0];
       if (post) {
-        target = `${origin}/space/${post.node_path}?post=${id}`;
+        // 공간 주소는 정해진 글자(영문·숫자·_-/.)만 쓴다 — 예전엔 DB에 든 글자를 그대로 넣어서,
+        // 이상한 공간 이름을 가진 글의 공유 링크를 열면 남의 코드가 돌 수 있었다(저장형 XSS)
+        if (/^[A-Za-z0-9_\-/.]{1,200}$/.test(String(post.node_path || ""))) {
+          target = `${origin}/space/${post.node_path}?post=${id}`;
+        }
         // 프리즈(검토 중) 된 글은 내용을 미리보기에 싣지 않는다 — 링크만 이어준다.
         if (!post.is_frozen) {
           let spaceLabel = "";
@@ -93,7 +105,7 @@ module.exports = async (req, res) => {
 <meta name="twitter:description" content="${esc(desc)}" />
 <meta name="twitter:image" content="${esc(image)}" />
 <meta http-equiv="refresh" content="0; url=${esc(target)}" />
-<script>location.replace(${JSON.stringify(target)});</script>
+<script>location.replace(${jsStr(target)});</script>
 </head>
 <body style="font-family:sans-serif;background:#FAF8F5;color:#2C2420">
 <p style="padding:24px">글로 이동하는 중이에요. 넘어가지 않으면 <a href="${esc(target)}">여기를 눌러주세요</a>.</p>

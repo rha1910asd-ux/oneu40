@@ -49,6 +49,11 @@ module.exports = async (req, res) => {
     res.status(400).json({ error: "닉네임은 20자 이내로 적어주세요." });
     return;
   }
+  // 관리자로 보일 수 있는 이름은 쓰지 못하게 한다(사칭 방지 — DB에도 같은 규칙이 있다)
+  if (/(관리자|운영자|운영진|오느\s*팀|admin|어드민)/i.test(trimmed)) {
+    res.status(400).json({ error: "쓸 수 없는 이름이에요. 다른 닉네임을 골라주세요." });
+    return;
+  }
 
   try {
     const profileRes = await fetch(

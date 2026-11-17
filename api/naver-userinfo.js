@@ -37,6 +37,6 @@ module.exports = async (req, res) => {
       picture: u.profile_image || undefined,
     });
   } catch (e) {
-    res.status(500).json({ error: String(e) });
+    res.status(500).json({ error: "internal error" });
   }
 };
