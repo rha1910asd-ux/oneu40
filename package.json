@@ -1,0 +1,9 @@
+{
+  "name": "oneu-deploy",
+  "private": true,
+  "description": "배포 저장소(oneu40)용 — 서버 함수(api/)가 쓰는 패키지만 적는다. 빌드는 하지 않는다.",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "web-push": "3.6.7"
+  }
+}

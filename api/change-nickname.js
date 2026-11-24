@@ -45,13 +45,10 @@ module.exports = async (req, res) => {
     res.status(400).json({ error: "닉네임을 입력해주세요." });
     return;
   }
-  if (trimmed.length > 20) {
-    res.status(400).json({ error: "닉네임은 20자 이내로 적어주세요." });
-    return;
-  }
-  // 관리자로 보일 수 있는 이름은 쓰지 못하게 한다(사칭 방지 — DB에도 같은 규칙이 있다)
-  if (/(관리자|운영자|운영진|오느\s*팀|admin|어드민)/i.test(trimmed)) {
-    res.status(400).json({ error: "쓸 수 없는 이름이에요. 다른 닉네임을 골라주세요." });
+  // 닉네임 규칙 — src/app/utils/nicknameRules.ts, DB 함수 nickname_problem 과 같은 규칙
+  const problem = nicknameProblem(trimmed);
+  if (problem) {
+    res.status(400).json({ error: problem });
     return;
   }
 
@@ -94,3 +91,33 @@ module.exports = async (req, res) => {
     res.status(500).json({ error: "처리 중 문제가 생겼어요." });
   }
 };
+
+const BAD = new RegExp(
+  "(씨발|시발|씨빨|시빨|쓰발|씹|좆|좃|존나|졸라|병신|븅신|빙신|개새|새끼|섀끼|미친놈|미친년|미친새|또라이|지랄|염병|엠창|느금|니애미|니미|애미|애비|닥쳐|꺼져|썅|엿먹|쌍놈|쌍년" +
+    "|섹스|섹시|야동|야사|보지|자지|불알|딸딸|자위|강간|성폭|몸캠|조건만남|창녀|창놈|걸레" +
+    "|한남충|한녀충|김치녀|된장녀|틀딱|급식충|맘충|짱깨|짱개|쪽바리|흑형|깜둥|애자|일베|히틀러" +
+    "|자살|필로폰|코카인|대마초|도박|카지노|바카라|토토사이트" +
+    "|fuck|fck|shit|bitch|sex|porn|nigg|fag|cunt|dick|pussy|asshole|slut|whore|rapist|nazi|hitler|penis)"
+);
+const STAFF = /(관리자|운영자|운영진|운영팀|관리인|어드민|admin|공식|staff|moderator|오느팀|오느운영|오느관리|오느공식|oneu)/;
+const CONTACT_RAW = /(http|www\.|\.com|\.kr|\.net|01[0-9][ .-]?[0-9]{3,4})/;
+const CONTACT = /(카톡|카카오톡|오픈채팅|오픈톡|텔레그램|텔레|인스타|kakao|telegram|openchat)/;
+const RESERVED = new Set(["익명", "누군가", "나", "오느", "탈퇴한사용자", "알수없음", "시스템", "system"]);
+
+/** 문제가 없으면 null, 있으면 사용자에게 보여줄 이유. */
+function nicknameProblem(input) {
+  const t = (input ?? "").trim();
+  if ([...t].length < 2) return "닉네임은 2자 이상으로 적어주세요.";
+  if ([...t].length > 12) return "닉네임은 12자 이내로 적어주세요.";
+  if (!/^[가-힣a-zA-Z0-9 _.-]+$/.test(t)) return "한글·영문·숫자와 띄어쓰기, _ . - 만 쓸 수 있어요.";
+  if (!/[가-힣a-zA-Z]/.test(t)) return "한글이나 영문을 한 글자 이상 넣어주세요.";
+  if (/\s{2,}/.test(t)) return "띄어쓰기는 한 칸씩만 쓸 수 있어요.";
+  if (/(.)\1{3,}/.test(t)) return "같은 글자를 너무 많이 이어 쓸 수 없어요.";
+  const v = t.toLowerCase();
+  const c = v.replace(/[ ._0-9-]/g, "");
+  if (RESERVED.has(c)) return "이미 앱에서 쓰는 이름이라 쓸 수 없어요.";
+  if (STAFF.test(c)) return "운영진으로 보일 수 있는 이름은 쓸 수 없어요.";
+  if (CONTACT_RAW.test(v) || CONTACT.test(c)) return "연락처나 홍보 문구는 닉네임에 쓸 수 없어요.";
+  if (BAD.test(c)) return "쓸 수 없는 말이 들어 있어요.";
+  return null;
+}

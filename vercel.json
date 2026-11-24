@@ -1,4 +1,7 @@
 {
+  "framework": null,
+  "buildCommand": "",
+  "installCommand": "npm install --omit=dev --no-audit --no-fund",
   "rewrites": [
     {
       "source": "/p/:id",
