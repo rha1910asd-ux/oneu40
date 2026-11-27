@@ -45,6 +45,16 @@ module.exports = async (req, res) => {
       return;
     }
 
+    // 계정 번호로만 이어진(자동으로 지워지지 않는) 기록을 서버에서도 한 번 더 지운다 —
+    // 브라우저 쪽 정리가 네트워크 문제로 일부 실패해도 개인 기록이 남지 않게.
+    const OWNED = ["posts", "comments", "post_likes", "notifications", "custom_nodes", "mymap_nodes",
+      "mymap_records", "mission_state", "temp_chat_messages", "push_subscriptions"];
+    await Promise.allSettled(OWNED.map((t) =>
+      fetch(`${SUPABASE_URL}/rest/v1/${t}?user_id=eq.${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${SERVICE_ROLE_KEY}`, apikey: SERVICE_ROLE_KEY, Prefer: "return=minimal" },
+      })));
+
     // 실제 계정 삭제 (Admin API — service role 키로만 가능)
     const delRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
       method: "DELETE",

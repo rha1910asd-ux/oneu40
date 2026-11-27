@@ -11,7 +11,7 @@
 
 const SITE_NAME = "오느";
 const DEFAULT_TITLE = "오느, 좋아하는 것으로 이어지는 공간";
-const DEFAULT_DESC = "관심사로 사람을 잇는 조용한 커뮤니티. 팔로워 수도, 인기 순위도 없이 좋아하는 것을 나눠요.";
+const DEFAULT_DESC = "관심사로 사람을 잇는 조용한 커뮤니티. 팔로워 수 경쟁 없이 좋아하는 것을 나눠요.";
 
 function esc(s) {
   return String(s ?? "")
