@@ -140,24 +140,27 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // 하루 사용량 확인 — 오늘 날짜(UTC 기준) 행을 읽어서 이미 한도를 넘었는지 본다.
-  const today = new Date().toISOString().slice(0, 10);
-  let currentCount = 0;
+  // 하루 사용량 — DB 함수가 "한도 확인 + 1 더하기"를 한 번에 해서, 요청을 동시에 여러 번 보내도
+  // 한도를 넘지 못한다. 확인 자체가 실패하면 막는다(예전엔 실패하면 그냥 통과시켜 비용이 샐 수 있었다).
+  const rpc = (fn, args) => fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+  });
   try {
-    const usageRes = await fetch(
-      `${SUPABASE_URL}/rest/v1/ai_import_usage?user_id=eq.${userId}&usage_date=eq.${today}&select=count`,
-      { headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` } }
-    );
-    const usageRows = usageRes.ok ? await usageRes.json() : [];
-    currentCount = usageRows[0]?.count ?? 0;
-    if (currentCount >= DAILY_LIMIT) {
+    const r = await rpc("claim_daily_quota", { p_user: userId, p_kind: "ai-outline", p_limit: DAILY_LIMIT });
+    if (!r.ok) throw new Error("quota");
+    if ((await r.json()) !== true) {
       res.status(429).json({ error: `오늘은 AI 자동 정리를 이미 ${DAILY_LIMIT}번 쓰셨어요. 내일 다시 시도해주세요.` });
       return;
     }
   } catch (e) {
-    // 사용량 확인 자체가 실패해도(네트워크 등) 기능이 완전히 막히진 않게 한다.
-    console.warn("[ai-outline] 사용량 확인 실패:", e);
+    console.warn("[ai-outline] 사용량 확인 실패");
+    res.status(503).json({ error: "잠시 후 다시 시도해주세요." });
+    return;
   }
+  // 정리에 실패하면 차지했던 1회를 돌려준다(실패한 시도까지 한도에 세지 않게)
+  const refund = () => rpc("release_daily_quota", { p_user: userId, p_kind: "ai-outline" }).catch(() => {});
 
   // Claude 호출 — 결과는 정리된 마크다운 텍스트 하나만 받는다.
   let outlineText;
@@ -197,6 +200,7 @@ module.exports = async (req, res) => {
     if (!claudeRes.ok) {
       const errBody = await claudeRes.text().catch(() => "");
       console.warn("[ai-outline] Claude 호출 실패:", claudeRes.status, errBody);
+      await refund();
       res.status(502).json({ error: "정리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요." });
       return;
     }
@@ -222,29 +226,9 @@ module.exports = async (req, res) => {
     if (!outlineText) throw new Error("empty response");
   } catch (e) {
     console.warn("[ai-outline] Claude 호출 실패:", e);
+    await refund();
     res.status(502).json({ error: "정리하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요." });
     return;
-  }
-
-  // 사용량을 늘린다 — 실제로 API 호출(비용 발생)까지 마친 뒤에 기록해야,
-  // 실패한 시도까지 한도에 포함되는 억울한 상황이 안 생긴다. 위에서 이미
-  // 읽어둔 currentCount에 1을 더한 값으로 통째로 덮어쓴다(upsert) — 행이
-  // 없으면 새로 만들고, 있으면 그 값으로 교체한다.
-  try {
-    await fetch(`${SUPABASE_URL}/rest/v1/ai_import_usage`, {
-      method: "POST",
-      headers: {
-        apikey: SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates",
-      },
-      body: JSON.stringify([{ user_id: userId, usage_date: today, count: currentCount + 1 }]),
-    });
-  } catch (e) {
-    // 기록에 실패해도 사용자에게는 이미 정리 결과를 내려줬으니 여기서 막지 않는다 —
-    // 다만 이 경우 하루 한도 집계가 실제보다 낮게 남을 수 있다.
-    console.warn("[ai-outline] 사용량 기록 실패:", e);
   }
 
   res.status(200).json({ text: outlineText });

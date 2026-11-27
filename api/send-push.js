@@ -102,8 +102,17 @@ module.exports = async (req, res) => {
       allowed = !!post && owner === targetUserId &&
         (await db(`post_likes?post_id=eq.${post.id}&user_id=eq.${callerId}&select=post_id&limit=1`)).length > 0;
     } else if (kind === "mymap-save") {
-      // 마이맵 저장은 서버에 흔적이 없어서 글쓴이에게만, 정해진 문구로만 보낸다
+      // 마이맵 저장은 서버에 흔적이 없어서 글쓴이에게만, 정해진 문구로만 보낸다.
+      // 같은 사람이 같은 글로 하루 한 번만 — 저장을 반복해 푸시를 퍼붓는 걸 막는다.
       allowed = !!post && owner === targetUserId;
+      if (allowed) {
+        const q = await fetch(`${SUPABASE_URL}/rest/v1/rpc/claim_daily_quota`, {
+          method: "POST",
+          headers: { ...H, "Content-Type": "application/json" },
+          body: JSON.stringify({ p_user: callerId, p_kind: `push-save:${post.id}`, p_limit: 1 }),
+        });
+        allowed = q.ok && (await q.json()) === true;
+      }
     } else if (kind === "freeze") {
       // 방금 이 글(또는 댓글)을 프리즈했고, 받는 사람이 그 글쓴이 또는 댓글 쓴 사람
       allowed = !!post &&

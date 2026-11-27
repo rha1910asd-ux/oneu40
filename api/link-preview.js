@@ -7,10 +7,14 @@
 //  - 로그인한 사용자만 쓸 수 있다.
 //  - http/https, 기본 포트만. 주소를 실제 IP로 풀어 내부·사설·루프백 주소면 거절한다.
 //  - 리다이렉트는 직접 따라가며 매번 같은 검사를 한다(최대 4번).
+//  - 실제 접속에 쓰는 IP도 그 자리에서 다시 검사한다(DNS 리바인딩 방지).
 //  - 6초 제한, 페이지 1.5MB·사진 8MB까지만 읽는다. 오류 내용은 밖으로 내보내지 않는다.
+//  - 한 사람이 하루 60번까지만(서버가 대신 접속해 주는 기능이라 남용을 막는다).
 
 const dns = require("node:dns").promises;
 const net = require("node:net");
+const http = require("node:http");
+const https = require("node:https");
 
 const UA = "Mozilla/5.0 (compatible; OneuLinkPreview/1.0; +https://oneu-six.vercel.app)";
 const PAGE_MAX = 1.5 * 1024 * 1024;
@@ -46,39 +50,63 @@ function normalize(raw) {
   return u;
 }
 
+// 실제로 접속하는 그 순간의 IP를 검사한다 — 주소 검사 때와 접속 때 DNS 답이 바뀌는 공격(DNS 리바인딩)으로
+// 내부망에 닿지 못하게, 접속에 쓰는 IP 자체를 이 lookup에서 걸러 고정한다.
+function guardedLookup(hostname, options, cb) {
+  dns.lookup(hostname, { all: true }).then((addrs) => {
+    if (!addrs.length || addrs.some((a) => privateIp(a.address))) return cb(new Error("private"));
+    if (options && options.all) return cb(null, addrs);
+    cb(null, addrs[0].address, addrs[0].family);
+  }, cb);
+}
+
+function request(u, accept) {
+  return new Promise((resolve, reject) => {
+    const mod = u.protocol === "https:" ? https : http;
+    const req = mod.request(u, {
+      method: "GET",
+      lookup: guardedLookup,
+      headers: { "User-Agent": UA, Accept: accept, "Accept-Language": "ko,en;q=0.8" },
+      timeout: 6000,
+    }, (res) => resolve(res));
+    req.on("timeout", () => req.destroy(new Error("timeout")));
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 async function safeFetch(raw, accept) {
   let u = normalize(raw);
   for (let hop = 0; hop < 5; hop++) {
     await assertPublic(u);
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 6000);
-    let r;
-    try {
-      r = await fetch(u.toString(), { redirect: "manual", signal: ctrl.signal, headers: { "User-Agent": UA, Accept: accept, "Accept-Language": "ko,en;q=0.8" } });
-    } finally {
-      clearTimeout(timer);
-    }
-    if (r.status >= 300 && r.status < 400 && r.headers.get("location")) {
-      u = new URL(r.headers.get("location"), u);
+    const r = await request(u, accept);
+    const loc = r.headers.location;
+    if (r.statusCode >= 300 && r.statusCode < 400 && loc) {
+      r.resume();
+      u = new URL(loc, u);
       continue;
     }
-    return { res: r, finalUrl: u };
+    return {
+      res: { ok: r.statusCode >= 200 && r.statusCode < 300, headers: { get: (k) => r.headers[String(k).toLowerCase()] || null }, stream: r },
+      finalUrl: u,
+    };
   }
   throw new Error("redirects");
 }
 
-async function readCapped(res, max) {
-  const reader = res.body.getReader();
-  const chunks = [];
-  let size = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.length;
-    if (size > max) { try { reader.cancel(); } catch (_) {} throw new Error("too large"); }
-    chunks.push(value);
-  }
-  return Buffer.concat(chunks.map((c) => Buffer.from(c)));
+function readCapped(res, max) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    const timer = setTimeout(() => { res.stream.destroy(); reject(new Error("timeout")); }, 6000);
+    res.stream.on("data", (c) => {
+      size += c.length;
+      if (size > max) { clearTimeout(timer); res.stream.destroy(); reject(new Error("too large")); return; }
+      chunks.push(c);
+    });
+    res.stream.on("end", () => { clearTimeout(timer); resolve(Buffer.concat(chunks)); });
+    res.stream.on("error", (e) => { clearTimeout(timer); reject(e); });
+  });
 }
 
 function decode(s) {
@@ -110,11 +138,25 @@ module.exports = async (req, res) => {
   const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!SUPABASE_URL || !KEY) return res.status(500).json({ error: "server not configured" });
   if (!auth) return res.status(401).json({ error: "로그인이 필요해요." });
+  let userId;
   try {
     const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { Authorization: auth, apikey: KEY } });
-    if (!r.ok || !(await r.json()).id) throw new Error("auth");
+    userId = r.ok ? (await r.json()).id : null;
+    if (!/^[0-9a-f-]{36}$/i.test(String(userId || ""))) throw new Error("auth");
   } catch (_) {
     return res.status(401).json({ error: "로그인이 필요해요." });
+  }
+
+  try {
+    const q = await fetch(`${SUPABASE_URL}/rest/v1/rpc/claim_daily_quota`, {
+      method: "POST",
+      headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ p_user: userId, p_kind: "link-preview", p_limit: 60 }),
+    });
+    if (!q.ok) throw new Error("quota");
+    if ((await q.json()) !== true) return res.status(429).json({ error: "오늘은 더 가져올 수 없어요. 내일 다시 해 주세요." });
+  } catch (_) {
+    return res.status(503).json({ error: "잠시 후 다시 해 주세요." });
   }
 
   const { url, mode } = req.body || {};
